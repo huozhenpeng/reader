@@ -198,11 +198,15 @@ public class ReaderResolve {
 
     public void drawPage(Canvas canvas) {
 //        DLog.d(TAG, "start drawPage,title:" + mTitle + " ,content:" + mContent);
+        //绘制Bitmap背景，这个canvas是跟Bitmap（当前页或者下一页）关联的canvas
         drawBackground(canvas);
+
+        //绘制外围区域，电池、百分比、页码什么的，点进去看看
         drawMarginArea(canvas);
         if (mTitle != null) {
             maybeDrawChapterTitle(canvas);
         }
+        //绘制正文
         if (mShowLines != null) {
             drawMainBodyArea(canvas);
         }

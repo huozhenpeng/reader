@@ -15,6 +15,7 @@ import android.os.BatteryManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -49,6 +50,8 @@ import static android.content.Context.BATTERY_SERVICE;
  */
 public class ReaderView extends FrameLayout {
     private static final String TAG = "ReaderView";
+
+    private boolean debug=true;
 
     protected Canvas mCurrPageCanvas;
     protected Canvas mNextPageCanvas;
@@ -87,13 +90,26 @@ public class ReaderView extends FrameLayout {
 
     public ReaderView(@NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
+        //初始化纸张，初始化mPaperPaint（纸张画笔，绘制纸张样式）
         initPaper();
+
+        //whether or not this View draw on its own,应该就是会不会执行onDraw方法，默认情况是true，不执行
         setWillNotDraw(false);
+
+        //一种翻页样式，控制翻页，先跳过去，先知道这个类是用来控制翻页动画的即可
         mEffect = new EffectOfRealOneWay(context);
+
+        //一个配置类，存储界面上文字大小、颜色、间距、电池样式各种乱七八糟的
         mReaderConfig = new ReaderConfig.Builder().build();
+
+        //一个回调，实现了两个接口：PageChangedCallback、PageDrawingCallback
+        //PageChangedCallback:获取上一页的时候回调；获取下一页的时候回调
+        //PageDrawingCallback:刷新ReaderView时调用;画当前页的时候调用;画下一页的时候调用
         SimplePageChangedCallback simplePageChangedCallback = new SimplePageChangedCallback();
         mPageChangedCallback = simplePageChangedCallback;
         mPageDrawingCallback = simplePageChangedCallback;
+
+        //一个观察者，作用未知，应该跟实现adapter有关，类似于ListView中使用adapter时也有观察者的实现
         mObserver = new AdapterDataObserver();
     }
 
@@ -113,6 +129,11 @@ public class ReaderView extends FrameLayout {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        if(debug)
+        {
+            Log.e(TAG,"onLayout");
+        }
+        //获取到ReaderView的宽高，初始化两个Bitmap对象（代表当前页与下一页）以及与之关联的canvas对象
         int width = getMeasuredWidth();
         int height = getMeasuredHeight();
         if (mCurrPageBitmap == null && mNextPageBitmap == null) {
@@ -123,9 +144,13 @@ public class ReaderView extends FrameLayout {
             mNextPageCanvas = new Canvas(mNextPageBitmap);
         }
 
+        //初始化ReaderManager，ReaderManager作用未知,初始化是在外面通过setReaderManager()设置的，
+        //应该是在使用ReaderView之前必须先设置
         if (mReaderManager != null) {
+            //通知ReaderManager，当前view的大小发生了变化，保存最新的
             mReaderManager.onAreaChanged(width, height);
             if (mCurrPageCanvas != null) {
+                //绘制当前页，核心，点进去看
                 mReaderManager.drawPage(mCurrPageCanvas);
             }
         }
@@ -144,90 +169,21 @@ public class ReaderView extends FrameLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        //由翻页动画类接管触摸事件
         if (mEffect.onTouchEvent(event)) {
             return true;
         }
         return super.onTouchEvent(event);
     }
 
-    @Override
-    protected void dispatchDraw(Canvas canvas) {
-        DLog.d("guolongDispatchDraw", "##########");
-        View firstPageView = null;
-        View lastPageView = null;
-        View eveyPageView = null;
-        for (int i = 0; i < getChildCount(); i++) {
-            View child = getChildAt(i);
-            ChildInPage childInPage = (ChildInPage) child.getTag();
-            if (childInPage == ChildInPage.FIRST_PAGE) {
-                firstPageView = child;
-            } else if (childInPage == ChildInPage.LAST_PAGE) {
-                lastPageView = child;
-            } else {
-                eveyPageView = child;
-            }
-        }
-        dispatchDrawCurrCanvas(firstPageView, lastPageView, eveyPageView);
-        dispatchDrawNextCanvas(firstPageView, lastPageView, eveyPageView);
-    }
-
-    private void dispatchDrawCurrCanvas(View firstPageView, View lastPageView, View eveyPageView) {
-        if (0 == mCurrCanvasPage) {
-            if (firstPageView != null)
-                firstPageView.setVisibility(View.VISIBLE);
-            if (lastPageView != null)
-                lastPageView.setVisibility(View.INVISIBLE);
-        } else if (mReaderManager.getReaderResolve().getPageSum() - 1 == mCurrCanvasPage) {
-            if (firstPageView != null)
-                firstPageView.setVisibility(View.INVISIBLE);
-            if (lastPageView != null)
-                lastPageView.setVisibility(View.VISIBLE);
-        } else {
-            if (firstPageView != null)
-                firstPageView.setVisibility(View.INVISIBLE);
-            if (lastPageView != null)
-                lastPageView.setVisibility(View.INVISIBLE);
-        }
-        boolean notDrawFirstView = firstPageView == null || firstPageView.getVisibility() != View.VISIBLE;
-        boolean notDrawLastView = lastPageView == null || lastPageView.getVisibility() != View.VISIBLE;
-        boolean notDrawEveyView = eveyPageView == null;
-        if (notDrawEveyView && notDrawFirstView && notDrawLastView) {
-            //不用画
-        } else {
-            super.dispatchDraw(mCurrPageCanvas);
-        }
-    }
-
-    private void dispatchDrawNextCanvas(View firstPageView, View lastPageView, View eveyPageView) {
-        if (0 == mNextCanvasPage) {
-            if (firstPageView != null)
-                firstPageView.setVisibility(View.VISIBLE);
-            if (lastPageView != null)
-                lastPageView.setVisibility(View.INVISIBLE);
-        } else if (mReaderManager.getReaderResolve().getPageSum() - 1 == mNextCanvasPage) {
-            if (firstPageView != null)
-                firstPageView.setVisibility(View.INVISIBLE);
-            if (lastPageView != null)
-                lastPageView.setVisibility(View.VISIBLE);
-        } else {
-            if (firstPageView != null)
-                firstPageView.setVisibility(View.INVISIBLE);
-            if (lastPageView != null)
-                lastPageView.setVisibility(View.INVISIBLE);
-        }
-        boolean notDrawFirstView = firstPageView == null || firstPageView.getVisibility() != View.VISIBLE;
-        boolean notDrawLastView = lastPageView == null || lastPageView.getVisibility() != View.VISIBLE;
-        boolean notDrawEveyView = eveyPageView == null;
-        if (notDrawEveyView && notDrawFirstView && notDrawLastView) {
-            //不用画
-        } else {
-            super.dispatchDraw(mNextPageCanvas);
-        }
-    }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        if(debug)
+        {
+            Log.e(TAG,"onDraw");
+        }
         if (isOpenPaperEffect) {
             canvas.drawPaint(mPaperPaint);
         }
@@ -749,12 +705,15 @@ public class ReaderView extends FrameLayout {
 
         @Override
         public void drawPage(@NonNull Canvas canvas) {
+            //这段代码应该是绘制电池相关，先跳过
             BatteryManager batteryManager = (BatteryManager) mReaderView.getContext().getSystemService(BATTERY_SERVICE);
             if (batteryManager != null) {
                 int battery = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
                 DLog.d(TAG, "battery:" + battery);
                 mReaderResolve.setBattery(battery);
             }
+
+            //核心，在外面调用setReaderManager()时，在setReaderManager方法内部会初始化mReaderResolve
             mReaderResolve.drawPage(canvas);
         }
 
